@@ -216,7 +216,12 @@ Resources:
 
   Efs:
     Type: AWS::EFS::FileSystem
-    Properties: {}
+    Properties: 
+      BackupPolicy:
+        Status: ENABLED
+      Encrypted: true
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_30_DAYS
 
   MountA:
     Type: AWS::EFS::MountTarget
