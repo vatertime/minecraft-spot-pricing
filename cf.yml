@@ -30,7 +30,12 @@ Parameters:
     Description: (Optional - An empty value disables this feature)
     Default: ''
 
-  YourIp:
+  YourIPv4:
+    Type: String
+    Description: (Optional - An empty value disables this feature)
+    Default: ''
+
+  YourIPv6:
     Type: String
     Description: (Optional - An empty value disables this feature)
     Default: ''
@@ -93,7 +98,8 @@ Metadata:
           default: Optional Remote Access (SSH) Configuration
         Parameters:
         - KeyPairName
-        - YourIp
+        - YourIPv4
+        - YourIPv6
       - Label: 
           default: Optional DNS Configuration
         Parameters:
@@ -118,8 +124,10 @@ Metadata:
         default: "A comma delimited list (no spaces) of player names"
       KeyPairName:
         default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
-      YourIp:
-        default: "If you wish to access the instance via SSH, provide your public IP address."
+      YourIPv4:
+        default: "If you wish to access the instance via SSH and using IPv4, provide it."
+      YourIPv6:
+        default: "If you wish to access the instance via SSH and using IPv6, provide it."
       HostedZoneId:
         default: "If you have a hosted zone in Route 53 and wish to update a DNS record whenever your Minecraft instance starts, supply the hosted zone ID here."
       RecordName:
@@ -131,7 +139,8 @@ Conditions:
   DifficultyProvided: !Not [ !Equals [ !Ref Difficulty, '' ] ]
   WhitelistProvided: !Not [ !Equals [ !Ref Whitelist, '' ] ]
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
-  IpAddressProvided: !Not [ !Equals [ !Ref YourIp, '' ] ]
+  IPv4AddressProvided: !Not [ !Equals [ !Ref YourIPv4, '' ] ]
+  IPv6AddressProvided: !Not [ !Equals [ !Ref YourIPv6, '' ] ]
   DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
 
@@ -257,11 +266,18 @@ Resources:
       GroupDescription: !Sub "${AWS::StackName}-ec2"
       SecurityGroupIngress:
       - !If
-        - IpAddressProvided 
+        - IPv4AddressProvided 
         - FromPort: 22
           ToPort: 22
           IpProtocol: tcp
-          CidrIp: !Sub "${YourIp}/32"
+          CidrIp: !Sub "${YourIPv4}/32"
+        - !Ref 'AWS::NoValue'
+      - !If
+        - IPv6AddressProvided 
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          CidrIpv6: !Sub "${YourIPv6}/128"
         - !Ref 'AWS::NoValue'
       - FromPort: 25565
         ToPort: 25565
