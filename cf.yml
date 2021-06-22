@@ -300,11 +300,11 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
+          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
           yum install -y amazon-efs-utils
           mkdir /opt/minecraft
           mount -t efs ${Efs}:/ /opt/minecraft
           chown 845:845 /opt/minecraft
-          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config          
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
