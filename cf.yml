@@ -73,6 +73,10 @@ Parameters:
     Type: String
     Description: Usernames of your friends
     Default: ''
+  MinecraftVersion:
+    Type: String
+    Description: Server minecraft version
+    Default: ''
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -94,6 +98,7 @@ Metadata:
         - AdminPlayerNames
         - Difficulty
         - Whitelist
+        - MinecraftVersion
       - Label: 
           default: Optional Remote Access (SSH) Configuration
         Parameters:
@@ -122,6 +127,8 @@ Metadata:
         default: "Which difficulty?"
       Whitelist:
         default: "A comma delimited list (no spaces) of player names"
+      MinecraftVersion:
+        default: "Minecraft version ie 1.16.3"
       KeyPairName:
         default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
       YourIPv4:
@@ -138,6 +145,7 @@ Conditions:
   AdminPlayerNamesProvided: !Not [ !Equals [ !Ref AdminPlayerNames, '' ] ]
   DifficultyProvided: !Not [ !Equals [ !Ref Difficulty, '' ] ]
   WhitelistProvided: !Not [ !Equals [ !Ref Whitelist, '' ] ]
+  MinecraftVersionProvided: !Not [ !Equals [ !Ref MinecraftVersion, '' ] ]
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IPv4AddressProvided: !Not [ !Equals [ !Ref YourIPv4, '' ] ]
   IPv6AddressProvided: !Not [ !Equals [ !Ref YourIPv6, '' ] ]
@@ -407,6 +415,11 @@ Resources:
               - WhitelistProvided
               - Name: "WHITELIST"
                 Value: !Sub "${Whitelist}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - MinecraftVersionProvided
+              - Name: "VERSION"
+                Value: !Sub "${MinecraftVersion}"
               - !Ref 'AWS::NoValue'
 
   # ====================================================
