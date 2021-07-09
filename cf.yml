@@ -66,8 +66,13 @@ Parameters:
 
   Difficulty:
     Type: String
-    Description: Examples include peaceful, easy (default), normal, and hard
-    Default: ''
+    Description: "The game's difficulty"
+    Default: normal
+    AllowedValues:
+    - peaceful
+    - easy
+    - normal
+    - hard
 
   Whitelist:
     Type: String
@@ -83,6 +88,54 @@ Parameters:
     Type: String
     Description: How much Memory to allocate for the JVM
     Default: '1G'
+
+  Seed:
+    Type: String
+    Description: The seed used to generate the world
+
+  MaxPlayers:
+    Type: Number
+    Description: Max number of players that can connect simultaneously (default 20)
+
+  ViewDistance:
+    Type: Number
+    Description: Max view radius (in chunks) the server will send to the client (default 10)
+
+  GameMode:
+    Type: String
+    Description: "Options: creative, survival (default), adventure, spectator (v1.8+)"
+    Default: survival
+    AllowedValues:
+    - creative
+    - survival
+    - adventure
+    - spectator
+
+  LevelType:
+    Type: String
+    Description: "Options: DEFAULT, FLAT, LARGEBIOMES, AMPLIFIED, CUSTOMIZED, BUFFET, BIOMESOP (v1.12-), BIOMESOPLENTY (v1.15+)"
+    Default: DEFAULT
+    AllowedValues:
+    - DEFAULT
+    - FLAT
+    - LARGEBIOMES
+    - AMPLIFIED
+    - CUSTOMIZED
+    - BUFFET
+    - BIOMESOP
+    - BIOMESOPLENTY
+
+  EnableRollingLogs:
+    Type: String
+    Description: "By default the log file will grow without limit. Set to true to use a rolling log strategy."
+    Default: false
+    AllowedValues:
+    - true
+    - false
+
+  Timezone:
+    Type: String
+    Description: "Change the server's timezone. Use the canonical name of the format: Area/Location (e.g. America/New_York)"
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -106,6 +159,13 @@ Metadata:
         - Whitelist
         - MinecraftVersion
         - Memory
+        - Seed
+        - MaxPlayers
+        - ViewDistance
+        - GameMode
+        - LevelType
+        - EnableRollingLogs
+        - Timezone
       - Label: 
           default: Optional Remote Access (SSH) Configuration
         Parameters:
@@ -148,6 +208,20 @@ Metadata:
         default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Minecraft instance starts, supply a record name here (e.g. minecraft.mydomain.com)."
       Memory:
         default: "If you wish to increase the Java memory-heap limit of 1GB. Format: <size>[g|G|m|M|k|K]"
+      Seed:
+        default: "Seed for world generation"
+      MaxPlayers:
+        default: "Max simultaneous players"
+      ViewDistance:
+        default: "Max view distance"
+      GameMode:
+        default: "The Minecraft game mode"
+      LevelType:
+        default: "Level type for world generation"
+      EnableRollingLogs:
+        default: "Whether to enable rolling logs"
+      Timezone:
+        default: "The server's timezone"
 
 Conditions:
   MinecraftTypeTagProvided: !Not [ !Equals [ !Ref MinecraftTypeTag, '' ] ]
@@ -161,6 +235,13 @@ Conditions:
   DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   MemoryProvided: !Not [ !Equals [ !Ref Memory, '' ] ]
+  SeedProvided: !Not [ !Equals [ !Ref Seed, '' ] ]
+  MaxPlayersProvided: !Not [ !Equals [ !Ref MaxPlayers, '' ] ]
+  ViewDistanceProvided: !Not [ !Equals [ !Ref ViewDistance, '' ] ]
+  GameModeProvided: !Not [ !Equals [ !Ref GameMode, '' ] ]
+  LevelTypeProvided: !Not [ !Equals [ !Ref LevelType, '' ] ]
+  EnableRollingLogsProvided: !Not [ !Equals [ !Ref EnableRollingLogs, '' ] ]
+  TimezoneProvided: !Not [ !Equals [ !Ref Timezone, '' ] ]
 
 
 Mappings:
@@ -435,6 +516,41 @@ Resources:
               - MemoryProvided
               - Name: "MEMORY"
                 Value: !Sub "${Memory}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - SeedProvided
+              - Name: "SEED"
+                Value: !Sub "${Seed}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - MaxPlayersProvided
+              - Name: "MAX_PLAYERS"
+                Value: !Sub "${MaxPlayers}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - ViewDistanceProvided
+              - Name: "VIEW_DISTANCE"
+                Value: !Sub "${ViewDistance}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - GameModeProvided
+              - Name: "MODE"
+                Value: !Sub "${GameMode}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - LevelTypeProvided
+              - Name: "LEVEL_TYPE"
+                Value: !Sub "${LevelType}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - EnableRollingLogsProvided
+              - Name: "ENABLE_ROLLING_LOGS"
+                Value: !Sub "${EnableRollingLogs}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - TimezoneProvided
+              - Name: "TZ"
+                Value: !Sub "${Timezone}"
               - !Ref 'AWS::NoValue'
 
   # ====================================================
