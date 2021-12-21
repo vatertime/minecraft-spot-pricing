@@ -25,6 +25,14 @@ Parameters:
     Description: "A t3.medium shouldn't cost much more than a cent per hour. Note: Leave this blank to use on-demand pricing."
     Default: "0.05"
 
+  EntryPoint:
+    Type: CommaDelimitedList
+    Description: "Task entrypoint (Optional - image default is script /start)"
+
+  Command:
+    Type: CommaDelimitedList
+    Description: "Task command (Optional - image default is empty)"
+
   KeyPairName:
     Type: String
     Description: (Optional - An empty value disables this feature)
@@ -168,6 +176,11 @@ Metadata:
         - LevelType
         - EnableRollingLogs
         - Timezone
+      - Label:
+          default: Optional ECS Task Configuration
+        Parameters:
+        - EntryPoint
+        - Command
       - Label: 
           default: Optional Remote Access (SSH) Configuration
         Parameters:
@@ -198,6 +211,10 @@ Metadata:
         default: "A comma delimited list (no spaces) of player names"
       MinecraftVersion:
         default: "Minecraft version ie 1.16.3"
+      EntryPoint:
+        default: "Task/container --entrypoint, comma separated e.g. /bin/bash,-c"
+      Command:
+        default: "Task/container command, comma separated arguments passed to entrypoint"
       KeyPairName:
         default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
       YourIPv4:
@@ -231,6 +248,8 @@ Conditions:
   DifficultyProvided: !Not [ !Equals [ !Ref Difficulty, '' ] ]
   WhitelistProvided: !Not [ !Equals [ !Ref Whitelist, '' ] ]
   MinecraftVersionProvided: !Not [ !Equals [ !Ref MinecraftVersion, '' ] ]
+  EntryPointProvided: !Not [ !Equals [ !Join [ "", !Ref EntryPoint ], '' ] ]
+  CommandProvided: !Not [ !Equals [ !Join [ "", !Ref Command ], '' ] ]
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IPv4AddressProvided: !Not [ !Equals [ !Ref YourIPv4, '' ] ]
   IPv6AddressProvided: !Not [ !Equals [ !Ref YourIPv6, '' ] ]
@@ -478,6 +497,14 @@ Resources:
         - Name: minecraft
           MemoryReservation: 1024
           Image: !Sub "itzg/minecraft-server:${MinecraftImageTag}"
+          EntryPoint: !If
+              - EntryPointProvided
+              - !Ref EntryPoint
+              - !Ref 'AWS::NoValue'
+          Command: !If
+              - CommandProvided
+              - !Ref Command
+              - !Ref 'AWS::NoValue'
           PortMappings:
           - ContainerPort: 25565
             HostPort: 25565
