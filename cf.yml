@@ -17,12 +17,12 @@ Parameters:
 
   InstanceType:
     Type: String
-    Description: "t3.medium is a good cost effective instance, 1 VCPU and 3.75 GB of RAM with moderate network performance. Change at your discretion. https://aws.amazon.com/ec2/instance-types/."
+    Description: "t3.medium is a good cost-effective instance, 2 vCPUs and 3.75 GB of RAM with moderate network performance. Change at your discretion. https://aws.amazon.com/ec2/instance-types/."
     Default: t3.medium
 
   SpotPrice:
     Type: String
-    Description: "A t3.medium shouldn't cost more than a cent per hour. Note: Leave this blank to use on-demand pricing."
+    Description: "A t3.medium shouldn't cost much more than a cent per hour. Note: Leave this blank to use on-demand pricing."
     Default: "0.05"
 
   KeyPairName:
