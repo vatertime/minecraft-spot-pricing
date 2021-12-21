@@ -96,10 +96,12 @@ Parameters:
   MaxPlayers:
     Type: Number
     Description: Max number of players that can connect simultaneously (default 20)
+    Default: -1
 
   ViewDistance:
     Type: Number
     Description: Max view radius (in chunks) the server will send to the client (default 10)
+    Default: -1
 
   GameMode:
     Type: String
@@ -236,8 +238,8 @@ Conditions:
   SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
   MemoryProvided: !Not [ !Equals [ !Ref Memory, '' ] ]
   SeedProvided: !Not [ !Equals [ !Ref Seed, '' ] ]
-  MaxPlayersProvided: !Not [ !Equals [ !Ref MaxPlayers, '' ] ]
-  ViewDistanceProvided: !Not [ !Equals [ !Ref ViewDistance, '' ] ]
+  MaxPlayersProvided: !Not [ !Equals [ !Ref MaxPlayers, -1 ] ]
+  ViewDistanceProvided: !Not [ !Equals [ !Ref ViewDistance, -1 ] ]
   GameModeProvided: !Not [ !Equals [ !Ref GameMode, '' ] ]
   LevelTypeProvided: !Not [ !Equals [ !Ref LevelType, '' ] ]
   EnableRollingLogsProvided: !Not [ !Equals [ !Ref EnableRollingLogs, '' ] ]
