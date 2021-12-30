@@ -461,8 +461,8 @@ Resources:
             Version: "2012-10-17"
             Statement: 
               - Effect: "Allow"
-                Action: "route53:*"
-                Resource: "*"
+                Action: "route53:ChangeResourceRecordSets"
+                Resource: !Sub "arn:aws:route53:::hostedzone/${HostedZoneId}"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -607,8 +607,8 @@ Resources:
             Version: "2012-10-17"
             Statement: 
               - Effect: "Allow"
-                Action: "route53:*"
-                Resource: "*"
+                Action: "route53:ChangeResourceRecordSets"
+                Resource: !Sub "arn:aws:route53:::hostedzone/${HostedZoneId}"
               - Effect: "Allow"
                 Action: "ec2:DescribeInstance*"
                 Resource: "*"
