@@ -25,6 +25,14 @@ Parameters:
     Description: "A t3.medium shouldn't cost much more than a cent per hour. Note: Leave this blank to use on-demand pricing."
     Default: "0.05"
 
+  ContainerInsights:
+    Type: String
+    Description: "Enable/Disable ECS Container Insights for ECS Cluster"
+    Default: disabled
+    AllowedValues:
+    - enabled
+    - disabled
+
   EntryPoint:
     Type: CommaDelimitedList
     Description: "Task entrypoint (Optional - image default is script /start)"
@@ -177,8 +185,9 @@ Metadata:
         - EnableRollingLogs
         - Timezone
       - Label:
-          default: Optional ECS Task Configuration
+          default: Optional ECS Cluster and Task Configuration
         Parameters:
+        - ContainerInsights
         - EntryPoint
         - Command
       - Label: 
@@ -211,6 +220,8 @@ Metadata:
         default: "A comma delimited list (no spaces) of player names"
       MinecraftVersion:
         default: "Minecraft version ie 1.16.3"
+      ContainerInsights:
+        default: "ECS Container Insights provide additional container metrics, and supports collection of Prometheus metrics.  Additional AWS charges may apply."
       EntryPoint:
         default: "Task/container --entrypoint, comma separated e.g. /bin/bash,-c"
       Command:
@@ -474,6 +485,9 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub "${AWS::StackName}-cluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: !Ref ContainerInsights
 
   EcsService:
     Type: AWS::ECS::Service
