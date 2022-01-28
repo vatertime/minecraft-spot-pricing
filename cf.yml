@@ -540,6 +540,7 @@ Resources:
       - Host:
           SourcePath: /opt/minecraft
         Name: minecraft
+      NetworkMode: "bridge"
       ContainerDefinitions:      
         - Name: minecraft
           MemoryReservation: 1024
