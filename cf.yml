@@ -33,6 +33,21 @@ Parameters:
     Type: CommaDelimitedList
     Description: "Task command (Optional - image default is empty)"
 
+  LogGroupName:
+    Type: String
+    Description: (Optional - An empty value disables this feature)
+    Default: ''
+
+  LogGroupRetentionInDays:
+    Type: Number
+    Description: (Log retention in days)
+    Default: 7
+
+  LogStreamPrefix:
+    Type: String
+    Description: (Optional)
+    Default: 'minecraft-server'
+
   KeyPairName:
     Type: String
     Description: (Optional - An empty value disables this feature)
@@ -181,6 +196,9 @@ Metadata:
         Parameters:
         - EntryPoint
         - Command
+        - LogGroupName
+        - LogGroupRetentionInDays
+        - LogStreamPrefix
       - Label: 
           default: Optional Remote Access (SSH) Configuration
         Parameters:
@@ -215,6 +233,12 @@ Metadata:
         default: "Task/container --entrypoint, comma separated e.g. /bin/bash,-c"
       Command:
         default: "Task/container command, comma separated arguments passed to entrypoint"
+      LogGroupName:
+        default: "Create CloudWatch Log Group with this name e.g. /Minecraft or /ecs/minecraft, and direct container logs there"
+      LogGroupRetentionInDays:
+        default: "Number of days to retain CloudWatch logs"
+      LogStreamPrefix:
+        default: "Prefix for container log stream e.g. minecraft-server"
       KeyPairName:
         default: "If you wish to access the instance via SSH, select a Key Pair to use. https://console.aws.amazon.com/ec2/v2/home?#KeyPairs:sort=keyName"
       YourIPv4:
@@ -250,6 +274,8 @@ Conditions:
   MinecraftVersionProvided: !Not [ !Equals [ !Ref MinecraftVersion, '' ] ]
   EntryPointProvided: !Not [ !Equals [ !Join [ "", !Ref EntryPoint ], '' ] ]
   CommandProvided: !Not [ !Equals [ !Join [ "", !Ref Command ], '' ] ]
+  LogGroupNameProvided: !Not [ !Equals [ !Ref LogGroupName, '' ] ]
+  LogStreamPrefixProvided:  !Not [ !Equals [ !Ref LogStreamPrefix, '' ] ]
   KeyPairNameProvided: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   IPv4AddressProvided: !Not [ !Equals [ !Ref YourIPv4, '' ] ]
   IPv6AddressProvided: !Not [ !Equals [ !Ref YourIPv6, '' ] ]
@@ -509,6 +535,19 @@ Resources:
           - ContainerPort: 25565
             HostPort: 25565
             Protocol: tcp
+          LogConfiguration:
+            !If
+            - LogGroupNameProvided
+            - LogDriver: awslogs
+              Options:
+                awslogs-group: !Ref CloudWatchLogGroup
+                awslogs-stream-prefix: !If
+                - LogStreamPrefixProvided
+                - !Sub ${LogStreamPrefix}
+                - !Ref 'AWS::NoValue'
+                awslogs-region: !Ref AWS::Region
+                awslogs-create-group: true
+            - !Ref 'AWS::NoValue'
           MountPoints:
           - ContainerPath: /data
             SourceVolume: minecraft
@@ -581,6 +620,13 @@ Resources:
               - Name: "TZ"
                 Value: !Sub "${Timezone}"
               - !Ref 'AWS::NoValue'
+
+  CloudWatchLogGroup:
+    Condition: LogGroupNameProvided
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${LogGroupName}"
+      RetentionInDays: !Sub "${LogGroupRetentionInDays}"
 
   # ====================================================
   # SET DNS RECORD
