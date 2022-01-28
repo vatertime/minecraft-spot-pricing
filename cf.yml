@@ -314,7 +314,7 @@ Resources:
   SubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select 
+      AvailabilityZone: !Select
       - 0
       - !GetAZs 
         Ref: 'AWS::Region'
@@ -336,7 +336,7 @@ Resources:
   SubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select 
+      AvailabilityZone: !Select
       - 1
       - !GetAZs 
         Ref: 'AWS::Region'
@@ -461,8 +461,9 @@ Resources:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       LaunchConfigurationName: !Ref LaunchConfiguration
-      MaxSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
-      MinSize: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
+      NewInstancesProtectedFromScaleIn: true
+      MaxSize: 1
+      MinSize: 0
       VPCZoneIdentifier:
         - !Ref SubnetA
         - !Ref SubnetB
@@ -501,6 +502,28 @@ Resources:
     Properties:
       ClusterName: !Sub "${AWS::StackName}-cluster"
 
+  ECSCapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref AutoScalingGroup
+        ManagedScaling:
+          MaximumScalingStepSize: 1
+          MinimumScalingStepSize: 1
+          Status: ENABLED
+          TargetCapacity: 100
+        ManagedTerminationProtection: ENABLED
+
+  EcsClusterCapacityProviderAssociation:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      Cluster: !Ref EcsCluster
+      CapacityProviders:
+        - !Ref ECSCapacityProvider
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: !Ref ECSCapacityProvider
+          Weight: 1
+
   EcsService:
     Type: AWS::ECS::Service
     Properties: 
@@ -508,6 +531,10 @@ Resources:
       DesiredCount: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
       ServiceName: !Sub "${AWS::StackName}-ecs-service"
       TaskDefinition: !Ref EcsTask  
+      CapacityProviderStrategy:
+        - CapacityProvider: !Ref ECSCapacityProvider
+          Weight: 1
+          Base: 0
       DeploymentConfiguration:
         MaximumPercent: 100
         MinimumHealthyPercent: 0
