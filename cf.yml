@@ -467,6 +467,8 @@ Resources:
       VPCZoneIdentifier:
         - !Ref SubnetA
         - !Ref SubnetB
+    Metadata:
+      LaunchEvent: !If [ DnsConfigEnabled, !GetAtt LaunchEvent.Arn, "" ]
 
   InstanceRole:
     Type: AWS::IAM::Role
@@ -731,7 +733,7 @@ Resources:
         - EC2 Instance Launch Successful
         detail:
           AutoScalingGroupName:
-          - !Ref AutoScalingGroup
+          - !Sub "${AWS::StackName}-asg"
       Name: !Sub "${AWS::StackName}-instance-launch"
       State: ENABLED
       Targets:
