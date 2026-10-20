@@ -109,7 +109,7 @@ Parameters:
 
   MinecraftImageTag:
     Type: String
-    Description: "Java version (Examples include latest, adopt13, openj9, etc) Refer to tag descriptions available here: https://github.com/itzg/docker-minecraft-server)"
+    Description: "Java runtime image tag. latest (Java 25) suits current Minecraft; older Minecraft versions need an older Java, e.g. java21, java17 or java8. Full list: https://docker-minecraft-server.readthedocs.io/en/latest/versions/java/"
     Default: 'latest'
 
   MinecraftTypeTag:
@@ -133,18 +133,18 @@ Parameters:
 
   Whitelist:
     Type: String
-    Description: Usernames of your friends
+    Description: "Usernames of your friends. Strongly recommended: without a whitelist anyone on the internet can join. When set, this list replaces the server's whitelist on every start, so add or remove players here rather than in game."
     Default: ''
 
   MinecraftVersion:
     Type: String
-    Description: Server minecraft version
+    Description: "Server Minecraft version, e.g. 1.21.10. Blank means the latest release, which upgrades your world automatically (and irreversibly) whenever a new version comes out and the server restarts."
     Default: ''
 
   Memory:
     Type: String
-    Description: How much Memory to allocate for the JVM
-    Default: '1G'
+    Description: "Java heap size: a percentage of the instance's memory (e.g. 75%) or a fixed size (e.g. 3G)"
+    Default: '75%'
 
   Seed:
     Type: String
@@ -269,7 +269,7 @@ Metadata:
       MinVCpuCount:
         default: "Minimum instance vCPUs when no instance type is given"
       MinecraftImageTag:
-        default: "Which version of Minecraft do you want to launch?"
+        default: "Which Java runtime image do you want to launch?"
       MinecraftTypeTag:
         default: "Which type of Minecraft do you want to launch?"
       AdminPlayerNames:
@@ -277,9 +277,9 @@ Metadata:
       Difficulty:
         default: "Which difficulty?"
       Whitelist:
-        default: "A comma delimited list (no spaces) of player names"
+        default: "A comma delimited list (no spaces) of player names allowed to join (recommended)"
       MinecraftVersion:
-        default: "Minecraft version ie 1.16.3"
+        default: "Minecraft version e.g. 1.21.10 (blank for latest)"
       EfsBackups:
         default: "Automatically back up your world (EFS) every day? Small additional AWS Backup storage charges apply."
       ContainerInsights:
@@ -305,7 +305,7 @@ Metadata:
       RecordName:
         default: "If you have a hosted zone in Route 53 and wish to set a DNS record whenever your Minecraft instance starts, supply a record name here (e.g. minecraft.mydomain.com)."
       Memory:
-        default: "If you wish to increase the Java memory-heap limit of 1GB. Format: <size>[g|G|m|M|k|K]"
+        default: "Java memory heap. Format: <percent>% of instance memory, or <size>[g|G|m|M|k|K]"
       Seed:
         default: "Seed for world generation"
       MaxPlayers:
@@ -513,6 +513,7 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash -xe
             echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+            echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config
             yum install -y amazon-efs-utils
             mkdir /opt/minecraft
             mount -t efs ${Efs}:/ /opt/minecraft
@@ -634,6 +635,7 @@ Resources:
       ContainerDefinitions:      
         - Name: minecraft
           MemoryReservation: 1024
+          StopTimeout: 90
           Image: !Sub "itzg/minecraft-server:${MinecraftImageTag}"
           EntryPoint: !If
               - EntryPointProvided
@@ -686,6 +688,16 @@ Resources:
               - WhitelistProvided
               - Name: "WHITELIST"
                 Value: !Sub "${Whitelist}"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - WhitelistProvided
+              - Name: "EXISTING_WHITELIST_FILE"
+                Value: "SYNCHRONIZE"
+              - !Ref 'AWS::NoValue'
+            - !If
+              - WhitelistProvided
+              - Name: "ENFORCE_WHITELIST"
+                Value: "TRUE"
               - !Ref 'AWS::NoValue'
             - !If
               - MinecraftVersionProvided
