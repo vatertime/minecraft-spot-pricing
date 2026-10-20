@@ -25,14 +25,6 @@ Parameters:
     Description: "A t3.medium shouldn't cost much more than a cent per hour. Note: Leave this blank to use on-demand pricing."
     Default: "0.05"
 
-  EfsBackups:
-    Type: String
-    Description: "Enabled: AWS Backup takes a daily backup of the EFS file system (your world) and keeps it for 35 days. Disabled: no automatic backups."
-    Default: Enabled
-    AllowedValues:
-    - Enabled
-    - Disabled
-
   ContainerInsights:
     Type: String
     Description: "Enable/Disable ECS Container Insights for ECS Cluster"
@@ -48,6 +40,14 @@ Parameters:
   Command:
     Type: CommaDelimitedList
     Description: "Task command (Optional - image default is empty)"
+
+  EfsBackups:
+    Type: String
+    Description: "Enabled: AWS Backup takes a daily backup of the EFS file system (your world) and keeps it for 35 days. Disabled: no automatic backups."
+    Default: Enabled
+    AllowedValues:
+    - Enabled
+    - Disabled
 
   LogGroupName:
     Type: String
@@ -187,7 +187,6 @@ Metadata:
         - ServerState
         - InstanceType
         - SpotPrice
-        - EfsBackups
       - Label:
           default: Server Settings
         Parameters:
@@ -208,6 +207,10 @@ Metadata:
         - LevelType
         - EnableRollingLogs
         - Timezone
+      - Label:
+          default: Backups
+        Parameters:
+        - EfsBackups
       - Label:
           default: Optional ECS Cluster and Task Configuration
         Parameters:
