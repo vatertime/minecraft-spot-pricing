@@ -1,6 +1,6 @@
 # Complete Minecraft Server Deployment (CloudFormation)
 
-The template contained within this repository can be used to deploy a Minecraft server to Amazon Web Services (AWS) in minutes. As the solution leverages "Spot Pricing", the server should only cost a few cents an hour to run, and you can even turn it off when you and your friends aren't playing - saving even more money.
+The template contained within this repository can be used to deploy a Minecraft server to Amazon Web Services (AWS) in minutes. As the solution leverages "Spot Pricing", the server should cost around 2 cents an hour to run, and you can even turn it off when you and your friends aren't playing - saving even more money.
 
 ## Prerequisites
 
@@ -163,13 +163,15 @@ Use Session Manager (see Remote Access) instead. If you want SSH, your public IP
 
 ## Expected Costs
 
-The two key components that will attract charges are:
+Prices below are for US East (Ohio), checked October 2026 against the AWS price list. Other regions differ a little; check the [EC2](https://aws.amazon.com/ec2/pricing/on-demand/), [Spot](https://aws.amazon.com/ec2/spot/pricing/) and [EFS](https://aws.amazon.com/efs/pricing/) pricing pages for yours. While the server is running nonstop on Spot, expect roughly $15 to $20 a month all in. While it is stopped, you only pay for EFS storage and backups, usually well under $1 a month.
 
-* **EC2** - If you're using spot pricing with a t3.medium-sized instance (the template's default of 4096 MiB and 2 vCPUs), I've been running my server nonstop for a month and the total cost was around $10/mo. On Demand costs roughly three times as much.
-* **Public IPv4 address** - AWS charges $0.005 an hour (about $3.60 a month) for the instance's public IP address while it is running.
-* **EFS** - Charged per Gigabyte stored per month (GB-Month). Varies based on region, but typically less than 50c per gigabyte. My EFS file system for Minecraft cost 7 cents per month. Files not accessed for 7 days move to the cheaper Infrequent Access storage class, and move back as soon as they are read. Daily backups (EfsBackups) add a small AWS Backup storage charge, usually about the size of your world
+* **EC2** - A t3.medium-sized instance (the template's default of 4096 MiB and 2 vCPUs) costs $0.0416 an hour On Demand, about $30 a month nonstop. Spot prices change constantly but are typically around $0.012 to $0.016 an hour, about $9 to $12 a month nonstop. With InstanceType left blank, AWS may pick a different instance that is cheaper at the time.
+* **Public IPv4 address** - $0.005 an hour (about $3.65 a month) for the instance's public IP address while it is running.
+* **EBS** - The instance's root volume (30 GiB gp3 on the ECS-optimized AMI) costs about $0.08 per GB-month, roughly $2.40 a month while running. It is deleted along with the instance when the server is stopped.
+* **EFS** - $0.30 per GB-month for Standard storage. Files not accessed for 7 days move to Infrequent Access ($0.025 per GB-month, plus $0.01 per GB when read), and move back as soon as they are read. A typical world is well under a gigabyte, so this is usually a few cents a month.
+* **Backups** - With EfsBackups enabled, AWS Backup charges $0.05 per GB-month. Backups are incremental, so you pay for one full copy of your world plus whatever changed each day, kept for 35 days.
 
-AWS do charge for data egress (i.e. data being sent from your Minecraft server to clients), but again this should be barely noticeable.
+AWS also charge for data egress (i.e. data being sent from your Minecraft server to clients) at $0.09 per GB, but the first 100 GB a month across your account are free, which a small server rarely exceeds.
 
 ## Help / Support
 
@@ -183,11 +185,7 @@ Be sure to check out the repository on GitHub. Unless your question is specifica
 
 NOTE: This should rarely be an issue when InstanceType is left blank, since AWS picks from every instance type that meets MinMemoryMiB and MinVCpuCount.
 
-It may be because the instance type you chose is not available in your region, or because your SpotPrice is below the current spot price for every suitable instance. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. Try leaving InstanceType blank, or raising SpotPrice. Otherwise, I would suggest going to the AWS Console > EC2 > Spot Requests > Pricing history, and find a suitable instance type that's cost effective and has little to no fluctuation in price.
-
-In the below example (Paris), `m5.large` looks like a good option. Try to create the CloudFormation stack again, changing the InstanceType CloudFormation parameter to `m5.large`.
-
-![Spot pricing history](readme-spot-pricing.jpg?raw=true)
+It may be because the instance type you chose is not available in your region, or because your SpotPrice is below the current spot price for every suitable instance. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. Try leaving InstanceType blank, or raising SpotPrice. Otherwise, go to the AWS Console > EC2 > Spot Requests > Pricing history, find a suitable instance type that's cost effective and has little to no fluctuation in price, and set it as the InstanceType parameter.
 
 ### Restarting the Container
 
