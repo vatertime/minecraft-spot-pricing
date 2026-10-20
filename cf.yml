@@ -5,7 +5,7 @@ Parameters:
   ECSAMI:
     Description: AWS ECS AMI ID
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id
 
   ServerState:
     Type: String
@@ -58,6 +58,14 @@ Parameters:
   Command:
     Type: CommaDelimitedList
     Description: "Task command (Optional - image default is empty)"
+
+  EfsBackups:
+    Type: String
+    Description: "Enabled: AWS Backup takes a daily backup of the EFS file system (your world) and keeps it for 35 days. Disabled: no automatic backups."
+    Default: Enabled
+    AllowedValues:
+    - Enabled
+    - Disabled
 
   LogGroupName:
     Type: String
@@ -224,6 +232,10 @@ Metadata:
         - EnableRollingLogs
         - Timezone
       - Label:
+          default: Backups
+        Parameters:
+        - EfsBackups
+      - Label:
           default: Optional ECS Cluster and Task Configuration
         Parameters:
         - ContainerInsights
@@ -268,6 +280,8 @@ Metadata:
         default: "A comma delimited list (no spaces) of player names"
       MinecraftVersion:
         default: "Minecraft version ie 1.16.3"
+      EfsBackups:
+        default: "Automatically back up your world (EFS) every day? Small additional AWS Backup storage charges apply."
       ContainerInsights:
         default: "ECS Container Insights provide additional container metrics, and supports collection of Prometheus metrics.  Additional AWS charges may apply."
       EntryPoint:
@@ -331,6 +345,7 @@ Conditions:
   LevelTypeProvided: !Not [ !Equals [ !Ref LevelType, '' ] ]
   EnableRollingLogsProvided: !Not [ !Equals [ !Ref EnableRollingLogs, '' ] ]
   TimezoneProvided: !Not [ !Equals [ !Ref Timezone, '' ] ]
+  EfsBackupsEnabled: !Equals [ !Ref EfsBackups, Enabled ]
 
 
 Mappings:
@@ -418,6 +433,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      BackupPolicy:
+        Status: !If [ EfsBackupsEnabled, ENABLED, DISABLED ]
       LifecyclePolicies:
       - TransitionToIA: AFTER_7_DAYS
       - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
@@ -553,6 +570,7 @@ Resources:
           - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile

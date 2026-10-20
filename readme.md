@@ -30,8 +30,8 @@ A few notes on the services we're using...
 
 1. Click the above link, you'll need to log into your AWS account if you haven't already.
 2. Ensure you've selected a suitable AWS Region (closest to you) via the selector at the top right.
-3. Upload the cf.yml file.
-4. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. You'll need a Key Pair and your Public IP address if you want to access the instance remotely via SSH (recommended). Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
+3. Download [cf.yml](https://raw.githubusercontent.com/vatertime/minecraft-spot-pricing/master/cf.yml) (right click, Save Link As) and upload it. Make sure you save the raw file and not the GitHub web page around it; uploading the web page gives a "Cannot convert the template" error.
+4. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. Remote access works out of the box through AWS Systems Manager Session Manager; you only need a Key Pair and your Public IP address if you prefer plain SSH. Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
 
 ## On Demand vs Spot
 
@@ -49,18 +49,26 @@ At this point you should *really* configure remote access as per the below secti
 
 ### Remote Access
 
-If you know what you're doing, you might want to SSH onto the Linux instance to see what's going on / debug / make improvements. For security, SSH should be locked down to a known IP address (i.e. you), preventing malicious users from trying to break in (or worse - succeeeding). You'll need to create a Key Pair in AWS, find your public IP address, and then provide both of the parameters in the Remote Access (SSH) Configuration (Optional) section.
+The easiest way to get a shell on the instance is AWS Systems Manager Session Manager, which needs no Key Pair, no open SSH port and no IP address. Go to the [EC2 console](https://console.aws.amazon.com/ec2/v2/home?#Instances:sort=instanceId), select the instance, click Connect, choose the Session Manager tab and click Connect. Your world and config live in `/opt/minecraft`.
+
+If you'd rather use SSH: if you know what you're doing, you might want to SSH onto the Linux instance to see what's going on / debug / make improvements. For security, SSH should be locked down to a known IP address (i.e. you), preventing malicious users from trying to break in (or worse - succeeeding). You'll need to create a Key Pair in AWS, find your public IP address, and then provide both of the parameters in the Remote Access (SSH) Configuration (Optional) section.
 
 For remote access, you'll need to:
 
 1. Create a [Key Pair](https://console.aws.amazon.com/ec2/v2/home#KeyPairs:sort=keyName) (Services > EC2 > Key Pairs). You'll need to use this to connect to the instance for additional setup.
 2. [Find your public IP address]((https://whatismyipaddress.com/)). You'll need this to connect to the instance for additional setup.
 
-If you're creating a new Minecraft deployment, provide these parameters when creating the stack. Otherwise, update your existing stack and provide these parameters.
+If you're creating a new Minecraft deployment, provide these parameters when creating the stack. Otherwise, update your existing stack and provide these parameters. Connect as `ec2-user`, e.g. `ssh -i mykey.pem ec2-user@<public ip>`. A "Permission denied (publickey)" error usually means the wrong user name, a different key than the one selected in the KeyPairName parameter, or a key file whose permissions are too open (`chmod 400 mykey.pem`).
 
 ### Custom Domain Name
 
 Every time your Minecraft server starts it'll have a new public IP address. This can be a pain to keep dishing out to your friends. If you're prepared to register a domain name (maybe you've already got one) and create a Route 53 hosted zone, this problem is easily fixed. You'll need to provide both of the parameters under the DNS Configuration (Optional) section. Whenever your instance is launched, a Lambda function fires off and creates / updates the record of your choosing. This way, you can have a custom domain name such as "minecraft.mydomain.com". Note that it may take a few minutes for the new IP to propagate to your friends computers. Have patience. Failing that just go to the EC2 console, and give them the new public IP address of your instance.
+
+If your domain is registered and hosted somewhere else (e.g. alongside your website and email), you don't need to move it. Create a Route 53 hosted zone for a subdomain only, such as `minecraft.mydomain.com`, then at your current DNS provider add NS records for that subdomain pointing at the four name servers Route 53 gives you. Use the new hosted zone's ID and `minecraft.mydomain.com` as the stack's DNS parameters. A hosted zone costs about $0.50 a month, which is cheaper than keeping an Elastic IP around while the server is stopped.
+
+### Backups
+
+By default (the EfsBackups parameter), AWS Backup takes a daily backup of the EFS file system that holds your world and keeps each backup for 35 days. To restore, go to [AWS Backup](https://console.aws.amazon.com/backup/home#/backupvaults), open the `aws/efs/automatic-backup-vault` vault, pick a recovery point and restore it (to a new directory in the same file system is the simplest). Set EfsBackups to Disabled if you don't want them.
 
 ## FAQ
 
@@ -124,6 +132,10 @@ Note that `--parameters` only lists ServerState here; every other parameter must
 
 Delete the CloudFormation stack. Except for the EFS, done. The EFS is retained when the CloudFormation stack is deleted to preserve your world, but can then be manually deleted.
 
+**My plugins need a MySQL database. Can I add one?**
+
+Not from this template. The cheapest option is usually to run MySQL/MariaDB on the same instance as a second container (edit the task definition in cf.yml and store its data under `/opt/minecraft` so it lands on EFS). Amazon RDS also works but costs considerably more than the Minecraft server itself, and keeps running when the server is stopped.
+
 **I'm running the "latest" version, and a new version has just been released. How do I update my server?** 
 
 You can force a redeployment of the service via ECS. [Update the service](https://console.aws.amazon.com/ecs/home?#/clusters/minecraft/services/minecraft/update), and select `Force new deployment`. 
@@ -140,7 +152,7 @@ You'll need to have remote access to the server (refer to Optional Features). Yo
 
 **I can no longer connect to my instance via SSH?** 
 
-Your public IP address has probably changed. [Check your public IP address]((https://whatismyipaddress.com/)) and update the stack, providing your new public IP address.
+Use Session Manager (see Remote Access) instead. If you want SSH, your public IP address has probably changed. [Check your public IP address]((https://whatismyipaddress.com/)) and update the stack, providing your new public IP address.
 
 ## What's Missing / Not Supported?
 
@@ -185,9 +197,9 @@ Visit the ECS dashboard in the AWS Console.
 
 ### Basic Docker Debugging
 
-If you SSH onto the server, you can run the following commands for debugging purposes:
+If you connect to the server (Session Manager or SSH), you can run the following commands for debugging purposes:
 
-* `sudo docker logs $(docker ps -q --filter ancestor=itzg/docker-minecraft-server)` - Check Minecraft container logs.
+* `sudo docker logs $(docker ps -q --filter ancestor=itzg/minecraft-server)` - Check Minecraft container logs.
 
 DO NOT restart the Minecraft docker container via SSH. This will cause ECS to lose track of the container, and effectively kill the restarted container and create a new one. Refer to Restarting the Container above for the right method.
 
