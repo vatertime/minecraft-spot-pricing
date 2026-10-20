@@ -92,7 +92,7 @@ Update your CloudFormation stack. Change the server state parameter from "Runnin
 
 **I'm done with Minecraft, how do I delete this server?** 
 
-Delete the CloudFormation stack. Done. If you want to keep your world, copy `/opt/minecraft` off the instance first, or make sure you have an AWS Backup recovery point.
+Delete the CloudFormation stack. Done.
 
 **My plugins need a MySQL database. Can I add one?**
 
