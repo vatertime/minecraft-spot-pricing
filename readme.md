@@ -33,6 +33,12 @@ A few notes on the services we're using...
 3. Download [cf.yml](https://raw.githubusercontent.com/vatertime/minecraft-spot-pricing/master/cf.yml) (right click, Save Link As) and upload it. Make sure you save the raw file and not the GitHub web page around it; uploading the web page gives a "Cannot convert the template" error.
 4. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. Remote access works out of the box through AWS Systems Manager Session Manager; you only need a Key Pair and your Public IP address if you prefer plain SSH. Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
 
+## On Demand vs Spot
+
+You may switch between On Demand and Spot via the InstancePurchaseMode CloudFormation parameter. It is not necessary to specify an InstanceType. Simply adjust MinMemoryMiB and MinVCpuCount to say how much memory and CPU you would like on your instance (the defaults, 4096 MiB and 2 vCPUs, match a t3.medium). AWS will find you the cheapest suitable instance, below the SpotPrice you have specified when using Spot. Should you wish to use a specific instance, you can specify it via the InstanceType parameter.
+
+Leaving SpotPrice blank also selects On Demand pricing, as it did in earlier versions of this template.
+
 ## Next Steps
 
 All things going well, your Minecraft server should be running in five minutes or so. Wait until CloudFormation reports the stack status as `CREATE_COMPLETE`. Go to the [EC2 dashboard in the AWS console](https://console.aws.amazon.com/ec2/v2/home?#Instances:sort=instanceId) and you should see a Minecraft server running. Take note of the public IP address. You should be able to fire up Minecraft, and join via this IP address. No need to provide a port number, we're using Minecraft's default. *Bonus points* - Public IP addresses are ugly. Refer to Custom Domain Name within Optional Features for a better solution. 
@@ -76,11 +82,11 @@ Everything is stored on EFS, so don't worry you won't lose anything (well, that'
 
 **My server keeps getting terminated. I don't like Spot Pricing. Take me back to the good old days.** 
 
-That's fine; update your CloudFormation stack and set the SpotPrice parameter to an empty value. Voila, you'll now be using On Demand pricing (and paying significantly more).
+That's fine; update your CloudFormation stack and set the InstancePurchaseMode parameter to "On Demand". Voila, you'll now be using On Demand pricing (and paying significantly more).
 
 **How do I change my instance type?** 
 
-Update your CloudFormation stack. Enter a different instance type.
+Update your CloudFormation stack. Enter a different instance type, or leave InstanceType blank and change MinMemoryMiB / MinVCpuCount to let AWS pick one for you.
 
 **How do I change my spot price limit?** 
 
@@ -90,9 +96,41 @@ Update your CloudFormation stack. Enter a different limit.
 
 Update your CloudFormation stack. Change the server state parameter from "Running" to "Stopped".
 
+**How do I turn my stack on and off from the terminal?**
+
+You can write a bash script using the AWS CLI like so (replace `minecraft` with your stack name):
+
+``` bash
+#!/bin/bash
+
+update_stack() {
+    local state=$1
+    aws cloudformation update-stack \
+        --stack-name minecraft \
+        --use-previous-template \
+        --parameters ParameterKey=ServerState,ParameterValue=$state \
+        --capabilities CAPABILITY_IAM
+}
+
+case "$1" in
+    start)
+        update_stack "Running"
+        ;;
+    stop)
+        update_stack "Stopped"
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+```
+
+Note that `--parameters` only lists ServerState here; every other parameter must be passed with `UsePreviousValue=true` (e.g. `ParameterKey=InstanceType,UsePreviousValue=true`) or it will be reset to its default.
+
 **I'm done with Minecraft, how do I delete this server?** 
 
-Delete the CloudFormation stack. Done.
+Delete the CloudFormation stack. Except for the EFS, done. The EFS is retained when the CloudFormation stack is deleted to preserve your world, but can then be manually deleted.
 
 **My plugins need a MySQL database. Can I add one?**
 
@@ -125,7 +163,7 @@ Use Session Manager (see Remote Access) instead. If you want SSH, your public IP
 The two key components that will attract charges are:
 
 * **EC2** - If you're using spot pricing (and the t3.medium instance as per the default in the template), I've been running my server nonstop for a month and the total cost was around $10/mo
-* **EFS** - Charged per Gigabyte stored per month (GB-Month). Varies based on region, but typically less than 50c per gigabyte. My EFS file system for Minecraft cost 7 cents per month
+* **EFS** - Charged per Gigabyte stored per month (GB-Month). Varies based on region, but typically less than 50c per gigabyte. My EFS file system for Minecraft cost 7 cents per month. Files not accessed for 7 days move to the cheaper Infrequent Access storage class, and move back as soon as they are read
 
 AWS do charge for data egress (i.e. data being sent from your Minecraft server to clients), but again this should be barely noticeable.
 
@@ -139,7 +177,9 @@ Be sure to check out the repository on GitHub. Unless your question is specifica
 
 ### Stack gets stuck on CREATE_IN_PROGRESS
 
-It may be because the `t3.medium` instance is not available in your region. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. I would suggest going to the AWS Console > EC2 > Spot Requests > Pricing History, and find a suitable instance type that's cost effective and has little to no fluctuation in price.
+NOTE: This should rarely be an issue when InstanceType is left blank, since AWS picks from every instance type that meets MinMemoryMiB and MinVCpuCount.
+
+It may be because the instance type you chose is not available in your region. As a result of this, an auto-scaling group gets successfully created - however it never launches an instance. This means the ECS service cannot ever start, as it has nowhere to place the container. I would suggest going to the AWS Console > EC2 > Spot Requests > Pricing History, and find a suitable instance type that's cost effective and has little to no fluctuation in price.
 
 In the below example (Paris), `m5.large` looks like a good option. Try to create the CloudFormation stack again, changing the InstanceType CloudFormation parameter to `m5.large`.
 
@@ -162,6 +202,14 @@ If you connect to the server (Session Manager or SSH), you can run the following
 * `sudo docker logs $(docker ps -q --filter ancestor=itzg/minecraft-server)` - Check Minecraft container logs.
 
 DO NOT restart the Minecraft docker container via SSH. This will cause ECS to lose track of the container, and effectively kill the restarted container and create a new one. Refer to Restarting the Container above for the right method.
+
+## Changelog
+
+Oct-2026
+  * Ported from upstream Factorio Spot Pricing: migrate from Launch Configuration to Launch Template, as Launch Configuration is unavailable in AWS accounts created after 01-Oct-2024.
+  * Ported from upstream: InstanceType is now optional. Specify the memory and vCPUs you need and AWS picks the cheapest instance; InstancePurchaseMode switches between Spot and On Demand.
+  * Ported from upstream: the EFS file system is retained when the stack is deleted, and uses lifecycle management to lower cost.
+  * DNS Lambda runtime updated to Python 3.13.
 
 ## Thanks
 

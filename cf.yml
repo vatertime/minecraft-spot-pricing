@@ -15,15 +15,33 @@ Parameters:
     - Running
     - Stopped
 
+  InstancePurchaseMode:
+    Type: String
+    Description: "Spot: Much cheaper, but your instance might restart during gameplay with a few minutes of unsaved gameplay lost. On Demand: More expensive, but your gameplay is unlikely to be interrupted by the server going down."
+    Default: "Spot"
+    AllowedValues:
+    - "On Demand"
+    - "Spot"
+
   InstanceType:
     Type: String
-    Description: "t3.medium is a good cost-effective instance, 2 vCPUs and 3.75 GB of RAM with moderate network performance. Change at your discretion. https://aws.amazon.com/ec2/instance-types/."
-    Default: t3.medium
+    Description: "Leave this blank to let AWS pick the cheapest instance that meets MinMemoryMiB and MinVCpuCount. Override at your discretion (e.g. t3.medium): https://aws.amazon.com/ec2/instance-types/."
+    Default: ""
 
   SpotPrice:
     Type: String
-    Description: "A t3.medium shouldn't cost much more than a cent per hour. Note: Leave this blank to use on-demand pricing."
+    Description: "Spot: the max price per hour (USD) to pay for a spot instance. Leaving this blank also selects on-demand pricing (kept for older stacks). On Demand: Ignored."
     Default: "0.05"
+
+  MinMemoryMiB:
+    Type: Number
+    Description: "Only used when InstanceType is blank: the minimum memory for your instance, in MiB."
+    Default: 4096
+
+  MinVCpuCount:
+    Type: Number
+    Description: "Only used when InstanceType is blank: the minimum vCPUs for your instance."
+    Default: 2
 
   ContainerInsights:
     Type: String
@@ -185,8 +203,14 @@ Metadata:
           default: Essential Configuration
         Parameters:
         - ServerState
+      - Label:
+          default: Instance Configuration
+        Parameters:
+        - InstancePurchaseMode
         - InstanceType
         - SpotPrice
+        - MinMemoryMiB
+        - MinVCpuCount
       - Label:
           default: Server Settings
         Parameters:
@@ -234,10 +258,16 @@ Metadata:
     ParameterLabels:
       ServerState:
         default: "Update this parameter to shut down / start up your Minecraft server as required to save on cost. Takes a few minutes to take effect."
+      InstancePurchaseMode:
+        default: "Spot or On Demand pricing?"
       InstanceType:
-        default: "Which instance type? You must make sure this is available in your region! https://aws.amazon.com/ec2/pricing/on-demand/"
+        default: "Which instance type? Leave blank to let AWS choose based on memory and vCPUs. If set, make sure it is available in your region! https://aws.amazon.com/ec2/pricing/on-demand/"
       SpotPrice:
-        default: "Maximum spot price per hour? Leave blank to disable spot pricing."
+        default: "Maximum spot price per hour?"
+      MinMemoryMiB:
+        default: "Minimum instance memory (MiB) when no instance type is given"
+      MinVCpuCount:
+        default: "Minimum instance vCPUs when no instance type is given"
       MinecraftImageTag:
         default: "Which version of Minecraft do you want to launch?"
       MinecraftTypeTag:
@@ -305,7 +335,8 @@ Conditions:
   IPv4AddressProvided: !Not [ !Equals [ !Ref YourIPv4, '' ] ]
   IPv6AddressProvided: !Not [ !Equals [ !Ref YourIPv6, '' ] ]
   DnsConfigEnabled: !And [ !Not [ !Equals [ !Ref HostedZoneId, '' ] ], !Not [ !Equals [ !Ref RecordName, '' ] ] ]
-  SpotPriceProvided: !Not [ !Equals [ !Ref SpotPrice, '' ] ]
+  UsingSpotInstance: !And [ !Equals [ !Ref InstancePurchaseMode, 'Spot' ], !Not [ !Equals [ !Ref SpotPrice, '' ] ] ]
+  InstanceTypeProvided: !Not [ !Equals [ !Ref InstanceType, '' ] ]
   MemoryProvided: !Not [ !Equals [ !Ref Memory, '' ] ]
   SeedProvided: !Not [ !Equals [ !Ref Seed, '' ] ]
   MaxPlayersProvided: !Not [ !Equals [ !Ref MaxPlayers, -1 ] ]
@@ -345,7 +376,8 @@ Resources:
       - !GetAZs 
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 0, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
-      VpcId: !Ref Vpc  
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   SubnetARoute:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -368,6 +400,7 @@ Resources:
         Ref: 'AWS::Region'
       CidrBlock: !Select [ 1, !Cidr [ 10.100.0.0/26, 4, 4 ] ]
       VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -397,9 +430,14 @@ Resources:
 
   Efs:
     Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BackupPolicy:
         Status: !If [ EfsBackupsEnabled, ENABLED, DISABLED ]
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_7_DAYS
+      - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
 
   MountA:
     Type: AWS::EFS::MountTarget
@@ -459,26 +497,26 @@ Resources:
         CidrIp: 0.0.0.0/0
       VpcId: !Ref Vpc
 
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !Ref ECSAMI
-      InstanceType: !Ref InstanceType
-      KeyName: 
-        !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
-      SecurityGroups:
-      - !Ref Ec2Sg
-      SpotPrice: !If [ SpotPriceProvided, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
-          yum install -y amazon-efs-utils
-          mkdir /opt/minecraft
-          mount -t efs ${Efs}:/ /opt/minecraft
-          chown 845:845 /opt/minecraft
+      LaunchTemplateName: !Sub "${AWS::StackName}-launch-template"
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !Ref ECSAMI
+        KeyName:
+          !If [ KeyPairNameProvided, !Ref KeyPairName, !Ref 'AWS::NoValue' ]
+        SecurityGroupIds:
+        - !Ref Ec2Sg
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+            yum install -y amazon-efs-utils
+            mkdir /opt/minecraft
+            mount -t efs ${Efs}:/ /opt/minecraft
+            chown 845:845 /opt/minecraft
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -488,7 +526,27 @@ Resources:
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-asg"
       DesiredCapacity: !FindInMap [ ServerState, !Ref ServerState, DesiredCapacity ]
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandAllocationStrategy: lowest-price
+          OnDemandPercentageAboveBaseCapacity:
+            !If [ UsingSpotInstance, 0, 100 ]
+          SpotAllocationStrategy: price-capacity-optimized
+          SpotMaxPrice:
+            !If [ UsingSpotInstance, !Ref SpotPrice, !Ref 'AWS::NoValue' ]
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate
+            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+          Overrides:
+          - !If
+            - InstanceTypeProvided
+            - InstanceType: !Ref InstanceType
+            - InstanceRequirements:
+                MemoryMiB:
+                  Min: !Ref MinMemoryMiB
+                VCpuCount:
+                  Min: !Ref MinVCpuCount
       NewInstancesProtectedFromScaleIn: true
       MaxSize: 1
       MinSize: 0
@@ -752,7 +810,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt SetDNSRecordLambdaRole.Arn
-      Runtime: python3.11
+      Runtime: python3.13
       Timeout: 20
 
   LaunchEvent:
