@@ -1,6 +1,6 @@
 # Complete Minecraft Server Deployment (CloudFormation)
 
-The template contained within this repository can be used to deploy a Minecraft server to Amazon Web Services (AWS) in minutes. As the solution leverages "Spot Pricing", the server should cost around 2 cents an hour to run, and you can even turn it off when you and your friends aren't playing - saving even more money.
+The template contained within this repository can be used to deploy a Minecraft server to Amazon Web Services (AWS) in minutes. As the solution leverages "Spot Pricing", the server should cost a few cents an hour to run, and you can even turn it off when you and your friends aren't playing - saving even more money.
 
 ## Prerequisites
 
@@ -31,11 +31,11 @@ A few notes on the services we're using...
 1. Click the above link, you'll need to log into your AWS account if you haven't already.
 2. Ensure you've selected a suitable AWS Region (closest to you) via the selector at the top right.
 3. Download [cf.yml](https://raw.githubusercontent.com/vatertime/minecraft-spot-pricing/master/cf.yml) (right click, Save Link As) and upload it. Make sure you save the raw file and not the GitHub web page around it; uploading the web page gives a "Cannot convert the template" error.
-4. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. Remote access works out of the box through AWS Systems Manager Session Manager; you only need a Key Pair and your Public IP address if you prefer plain SSH. Refer to the Remote Access section below. There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
+4. Click Next to proceed through the CloudFormation deployment, provide parameters on the following page. Remote access works out of the box through AWS Systems Manager Session Manager; you only need a Key Pair and your Public IP address if you prefer plain SSH. Refer to the Remote Access section below. Two parameters are worth setting now: Whitelist (the player names allowed to join; without it anyone on the internet who finds your server can join) and MinecraftVersion (e.g. 1.21.10; left blank, the server upgrades your world to every new release when it restarts, which cannot be undone and can break mods). There should be no need to touch any other parameters unless you have reason to do so. Continue through the rest of the deployment. 
 
 ## On Demand vs Spot
 
-You may switch between On Demand and Spot via the InstancePurchaseMode CloudFormation parameter. It is not necessary to specify an InstanceType. Simply adjust MinMemoryMiB and MinVCpuCount to say how much memory and CPU you would like on your instance (the defaults, 4096 MiB and 2 vCPUs, match a t3.medium). AWS will find you the cheapest suitable instance, below the SpotPrice you have specified when using Spot. Should you wish to use a specific instance, you can specify it via the InstanceType parameter.
+You may switch between On Demand and Spot via the InstancePurchaseMode CloudFormation parameter. It is not necessary to specify an InstanceType. Simply adjust MinMemoryMiB and MinVCpuCount to say how much memory and CPU you would like on your instance (the defaults are 4096 MiB and 2 vCPUs). AWS will find you the cheapest suitable instance, below the SpotPrice you have specified when using Spot. When choosing for you, AWS leaves out burstable instance types such as t3, so expect something like a c6a.large or c5a.large. Should you wish to use a specific instance, you can specify it via the InstanceType parameter. For a small server that is mostly idle, `t3.medium` or `t3a.medium` costs roughly half as much, but burstable instances charge extra when the CPU stays busy for long stretches.
 
 Leaving SpotPrice blank also selects On Demand pricing, as it did in earlier versions of this template.
 
@@ -78,7 +78,7 @@ Nope. The stack creates everything you need.
 
 **What if my server is terminated because AWS reclaimed my spot instance?** 
 
-Everything is stored on EFS, so don't worry you won't lose anything (well, that's partially true - you might lose up to 5 minutes of gameplay depending on when the server last saved). There is every chance your instance will come back in a few minutes. If not you can leave InstanceType blank (so AWS can choose from more instance types), increase your spot price, or switch InstancePurchaseMode to "On Demand". All of these options can be performed by updating your CloudFormation stack parameters.
+Everything is stored on EFS, so don't worry you won't lose anything. AWS gives a two minute warning before reclaiming a spot instance, and the template uses it to stop the Minecraft server cleanly, which saves the world. In the rare case the server cannot stop in time you might lose up to 5 minutes of gameplay, depending on when it last saved. There is every chance your instance will come back in a few minutes. If not you can leave InstanceType blank (so AWS can choose from more instance types), increase your spot price, or switch InstancePurchaseMode to "On Demand". All of these options can be performed by updating your CloudFormation stack parameters.
 
 **My server keeps getting terminated. I don't like Spot Pricing. Take me back to the good old days.** 
 
@@ -147,7 +147,7 @@ Not from this template. The cheapest option is usually to run MySQL/MariaDB on t
 
 **I'm running the "latest" version, and a new version has just been released. How do I update my server?** 
 
-Restart the container (see Restarting the Container below). The container downloads the new server version when it starts.
+If MinecraftVersion is blank, restart the container (see Restarting the Container below). The container downloads the new server version when it starts. If you pinned a version, update the stack with the new MinecraftVersion instead. Either way, upgrading a world cannot be undone, so make sure your mods or plugins support the new version first (and a recent backup exists).
 
 **How can I change map settings, server settings etc.** 
 
@@ -163,9 +163,9 @@ Use Session Manager (see Remote Access) instead. If you want SSH, your public IP
 
 ## Expected Costs
 
-Prices below are for US East (Ohio), checked October 2026 against the AWS price list. Other regions differ a little; check the [EC2](https://aws.amazon.com/ec2/pricing/on-demand/), [Spot](https://aws.amazon.com/ec2/spot/pricing/) and [EFS](https://aws.amazon.com/efs/pricing/) pricing pages for yours. While the server is running nonstop on Spot, expect roughly $15 to $20 a month all in. While it is stopped, you only pay for EFS storage and backups, usually well under $1 a month.
+Prices below are for US East (Ohio), checked October 2026 against the AWS price list. Other regions differ a little; check the [EC2](https://aws.amazon.com/ec2/pricing/on-demand/), [Spot](https://aws.amazon.com/ec2/spot/pricing/) and [EFS](https://aws.amazon.com/efs/pricing/) pricing pages for yours. While the server is running nonstop on Spot, expect roughly $30 to $35 a month all in with the default instance choice, or $15 to $20 with a t3.medium. While it is stopped, you only pay for EFS storage and backups, usually well under $1 a month.
 
-* **EC2** - A t3.medium-sized instance (the template's default of 4096 MiB and 2 vCPUs) costs $0.0416 an hour On Demand, about $30 a month nonstop. Spot prices change constantly but are typically around $0.012 to $0.016 an hour, about $9 to $12 a month nonstop. With InstanceType left blank, AWS may pick a different instance that is cheaper at the time.
+* **EC2** - With InstanceType left blank, AWS picks the cheapest non-burstable instance with at least 4096 MiB and 2 vCPUs, typically a c6a.large or similar. That costs about $0.077 an hour On Demand, about $56 a month nonstop. Spot prices change constantly but are typically around $0.03 to $0.04 an hour, about $22 to $29 a month nonstop. If you set InstanceType to t3.medium instead, it costs $0.0416 an hour On Demand (about $30 a month) and typically $0.012 to $0.016 an hour on Spot (about $9 to $12 a month), plus CPU credit charges if the server stays busy.
 * **Public IPv4 address** - $0.005 an hour (about $3.65 a month) for the instance's public IP address while it is running.
 * **EBS** - The instance's root volume (30 GiB gp3 on the ECS-optimized AMI) costs about $0.08 per GB-month, roughly $2.40 a month while running. It is deleted along with the instance when the server is stopped.
 * **EFS** - $0.30 per GB-month for Standard storage. Files not accessed for 7 days move to Infrequent Access ($0.025 per GB-month, plus $0.01 per GB when read), and move back as soon as they are read. A typical world is well under a gigabyte, so this is usually a few cents a month.
@@ -209,6 +209,9 @@ DO NOT restart the Minecraft docker container via SSH. This will cause ECS to lo
 ## Changelog
 
 Oct-2026
+  * The Java heap now defaults to 75% of the instance's memory instead of a fixed 1 GB (Memory parameter). Existing stacks keep their current value when updated; set Memory to 75% to pick this up.
+  * The server now saves cleanly before a spot instance is reclaimed (ECS spot instance draining) and gets 90 seconds to stop instead of 30.
+  * When Whitelist is set, it is now enforced and replaces the server's whitelist on every start, so players added in game with /whitelist are removed at the next restart. Add them to the parameter instead.
   * Instances now run the Amazon Linux 2023 ECS-optimized AMI.
   * Daily EFS backups via AWS Backup, retained for 35 days (EfsBackups parameter).
   * Remote access via AWS Systems Manager Session Manager, no Key Pair or open SSH port needed.
